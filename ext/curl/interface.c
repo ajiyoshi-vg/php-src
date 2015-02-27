@@ -3423,7 +3423,6 @@ static void _php_curl_close_ex(php_curl *ch TSRMLS_DC)
 static void _php_curl_close(zend_rsrc_list_entry *rsrc TSRMLS_DC)
 {
 	php_curl *ch = (php_curl *) rsrc->ptr;
-	CURL* cp = ch->cp;
 	_php_curl_close_ex(ch TSRMLS_CC);
 }
 /* }}} */
