@@ -297,6 +297,10 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_curl_init, 0, 0, 0)
 	ZEND_ARG_INFO(0, url)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_curl_init_p, 0, 0, 0)
+	ZEND_ARG_INFO(0, url)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO(arginfo_curl_copy_handle, 0)
 	ZEND_ARG_INFO(0, ch)
 ZEND_END_ARG_INFO()
@@ -434,6 +438,7 @@ ZEND_END_ARG_INFO()
  */
 const zend_function_entry curl_functions[] = {
 	PHP_FE(curl_init,                arginfo_curl_init)
+	PHP_FE(curl_init_p,                arginfo_curl_init_p)
 	PHP_FE(curl_copy_handle,         arginfo_curl_copy_handle)
 	PHP_FE(curl_version,             arginfo_curl_version)
 	PHP_FE(curl_setopt,              arginfo_curl_setopt)
@@ -2015,7 +2020,7 @@ PHP_FUNCTION(curl_init)
 }
 /* }}} */
 
-PHP_FUNCTION(curl_pinit)
+PHP_FUNCTION(curl_init_p)
 {
 	curl_do_init(INTERNAL_FUNCTION_PARAM_PASSTHRU, curl_persistent_handle());
 }

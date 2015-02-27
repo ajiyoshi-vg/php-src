@@ -75,6 +75,7 @@ PHP_FUNCTION(curl_error);
 PHP_FUNCTION(curl_exec);
 PHP_FUNCTION(curl_getinfo);
 PHP_FUNCTION(curl_init);
+PHP_FUNCTION(curl_init_p);
 PHP_FUNCTION(curl_setopt);
 PHP_FUNCTION(curl_setopt_array);
 PHP_FUNCTION(curl_version);
