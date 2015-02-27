@@ -183,6 +183,7 @@ typedef struct {
 	zend_bool                in_callback;
 	zval                     *clone;
 	zend_bool                safe_upload;
+	zend_bool                persistent;
 } php_curl;
 
 #define CURLOPT_SAFE_UPLOAD -1
