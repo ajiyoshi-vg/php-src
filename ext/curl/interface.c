@@ -91,6 +91,7 @@
 int  le_curl;
 int  le_curl_multi_handle;
 int  le_curl_share_handle;
+static int  le_curl_persistent_handle;
 
 #ifdef PHP_CURL_NEED_OPENSSL_TSL /* {{{ */
 static MUTEX_T *php_curl_openssl_tsl = NULL;
@@ -150,6 +151,7 @@ static struct gcry_thread_cbs php_curl_gnutls_tsl = {
 
 static void _php_curl_close_ex(php_curl *ch TSRMLS_DC);
 static void _php_curl_close(zend_rsrc_list_entry *rsrc TSRMLS_DC);
+static void _php_curl_close_pcurl(zend_rsrc_list_entry *rsrc TSRMLS_DC);
 
 
 #define SAVE_CURL_ERROR(__handle, __err) (__handle)->err.no = (int) __err;
@@ -625,6 +627,7 @@ PHP_MINIT_FUNCTION(curl)
 	le_curl = zend_register_list_destructors_ex(_php_curl_close, NULL, "curl", module_number);
 	le_curl_multi_handle = zend_register_list_destructors_ex(_php_curl_multi_close, NULL, "curl_multi", module_number);
 	le_curl_share_handle = zend_register_list_destructors_ex(_php_curl_share_close, NULL, "curl_share", module_number);
+	le_curl_persistent_handle = zend_register_list_destructors_ex(NULL, _php_curl_close_pcurl, "curl_persistent", module_number);
 
 	REGISTER_INI_ENTRIES();
 
@@ -1924,24 +1927,21 @@ static void _php_curl_set_default_options(php_curl *ch)
 }
 /* }}} */
 
-/* {{{ proto resource curl_init([string url])
-   Initialize a cURL session */
-PHP_FUNCTION(curl_init)
+static ZEND_RESULT_CODE curl_do_init(INTERNAL_FUNCTION_PARAMETERS, CURL* cp)
 {
 	php_curl	*ch;
-	CURL		*cp;
 	zval		*clone;
 	char		*url = NULL;
 	int		url_len = 0;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s", &url, &url_len) == FAILURE) {
-		return;
+		return FAILURE;
 	}
 
-	cp = curl_easy_init();
 	if (!cp) {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Could not initialize a new cURL handle");
 		RETURN_FALSE;
+		return FAILURE;
 	}
 
 	alloc_curl_handle(&ch);
@@ -1962,13 +1962,63 @@ PHP_FUNCTION(curl_init)
 		if (php_curl_option_url(ch, url, url_len TSRMLS_CC) == FAILURE) {
 			_php_curl_close_ex(ch TSRMLS_CC);
 			RETURN_FALSE;
+			return FAILURE;
 		}
 	}
 
 	ZEND_REGISTER_RESOURCE(return_value, ch, le_curl);
 	ch->id = Z_LVAL_P(return_value);
+	return SUCCESS;
+}
+
+static CURL* curl_persistent_handle()
+{
+#define PCURL_KEY ("curl_persistent_handler_key")
+#define PCURL_KEY_LEN (sizeof(PCURL_KEY))
+
+	CURL* cp;
+	zend_rsrc_list_entry *le;
+	if (zend_hash_find(&EG(persistent_list), PCURL_KEY, PCURL_KEY_LEN, (void**)&le) == SUCCESS) {
+		php_printf("pcurl cached(%x)\n", le->ptr);
+		return le->ptr;
+	} 
+	cp = curl_easy_init();
+	if (cp) {
+		zend_rsrc_list_entry new_le;
+		new_le.ptr = cp;
+		new_le.type = le_curl_persistent_handle;
+		zend_hash_add(&EG(persistent_list), PCURL_KEY, PCURL_KEY_LEN, &new_le, sizeof(zend_rsrc_list_entry), NULL);
+		php_printf("pcurl created(%x)\n", cp);
+		return cp;
+	}
+	return NULL;
+
+#undef PCURL_KEY_LEN
+#undef PCURL_KEY
+}
+static void curl_destory(CURL* cp)
+{
+#if PHP_CURL_DEBUG
+	fprintf(stderr, "curl_destory CALLED, cp = %x\n", cp);
+#endif
+	curl_easy_cleanup(cp);
+}
+
+/* {{{ proto resource curl_init([string url])
+   Initialize a cURL session */
+PHP_FUNCTION(curl_init)
+{
+	CURL* cp = curl_easy_init();
+	if (curl_do_init(INTERNAL_FUNCTION_PARAM_PASSTHRU, cp) == FAILURE) {
+		curl_destory(cp);
+	}
 }
 /* }}} */
+
+PHP_FUNCTION(curl_pinit)
+{
+	curl_do_init(INTERNAL_FUNCTION_PARAM_PASSTHRU, curl_persistent_handle());
+}
 
 /* {{{ proto resource curl_copy_handle(resource ch)
    Copy a cURL handle along with all of it's preferences */
@@ -3286,7 +3336,7 @@ static void _php_curl_close_ex(php_curl *ch TSRMLS_DC)
 	curl_easy_setopt(ch->cp, CURLOPT_HEADERFUNCTION, curl_write_nothing);
 	curl_easy_setopt(ch->cp, CURLOPT_WRITEFUNCTION, curl_write_nothing);
 
-	curl_easy_cleanup(ch->cp);
+	//curl_easy_cleanup(ch->cp);
 
 	/* cURL destructors should be invoked only by last curl handle */
 	if (Z_REFCOUNT_P(ch->clone) <= 1) {
@@ -3364,9 +3414,17 @@ static void _php_curl_close_ex(php_curl *ch TSRMLS_DC)
 static void _php_curl_close(zend_rsrc_list_entry *rsrc TSRMLS_DC)
 {
 	php_curl *ch = (php_curl *) rsrc->ptr;
+	CURL* cp = ch->cp;
 	_php_curl_close_ex(ch TSRMLS_CC);
+	curl_destory(cp);
 }
 /* }}} */
+
+static void _php_curl_close_pcurl(zend_rsrc_list_entry *rsrc TSRMLS_DC)
+{
+	CURL *cp = rsrc->ptr;
+	curl_destory(cp);
+}
 
 #if LIBCURL_VERSION_NUM >= 0x070c00 /* Available since 7.12.0 */
 /* {{{ proto bool curl_strerror(int code)
