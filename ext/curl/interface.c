@@ -2134,6 +2134,7 @@ PHP_FUNCTION(curl_copy_handle)
 
 	ZEND_REGISTER_RESOURCE(return_value, dupch, le_curl);
 	dupch->id = Z_LVAL_P(return_value);
+	dupch->persistent = 0;
 }
 /* }}} */
 
