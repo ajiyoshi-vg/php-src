@@ -1932,7 +1932,7 @@ static void _php_curl_set_default_options(php_curl *ch)
 }
 /* }}} */
 
-static ZEND_RESULT_CODE curl_do_init(INTERNAL_FUNCTION_PARAMETERS, CURL* cp, zend_bool persistent)
+static void curl_do_init(INTERNAL_FUNCTION_PARAMETERS, CURL* cp, zend_bool persistent)
 {
 	php_curl	*ch;
 	zval		*clone;
@@ -1940,13 +1940,12 @@ static ZEND_RESULT_CODE curl_do_init(INTERNAL_FUNCTION_PARAMETERS, CURL* cp, zen
 	int		url_len = 0;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|s", &url, &url_len) == FAILURE) {
-		return FAILURE;
+		return;
 	}
 
 	if (!cp) {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Could not initialize a new cURL handle");
 		RETURN_FALSE;
-		return FAILURE;
 	}
 
 	alloc_curl_handle(&ch);
@@ -1968,13 +1967,11 @@ static ZEND_RESULT_CODE curl_do_init(INTERNAL_FUNCTION_PARAMETERS, CURL* cp, zen
 		if (php_curl_option_url(ch, url, url_len TSRMLS_CC) == FAILURE) {
 			_php_curl_close_ex(ch TSRMLS_CC);
 			RETURN_FALSE;
-			return FAILURE;
 		}
 	}
 
 	ZEND_REGISTER_RESOURCE(return_value, ch, le_curl);
 	ch->id = Z_LVAL_P(return_value);
-	return SUCCESS;
 }
 
 static CURL* curl_persistent_handle(INTERNAL_FUNCTION_PARAMETERS)
@@ -2019,9 +2016,7 @@ static void curl_destory(CURL* cp)
 PHP_FUNCTION(curl_init)
 {
 	CURL* cp = curl_easy_init();
-	if (curl_do_init(INTERNAL_FUNCTION_PARAM_PASSTHRU, cp, 0) == FAILURE) {
-		curl_destory(cp);
-	}
+	curl_do_init(INTERNAL_FUNCTION_PARAM_PASSTHRU, cp, 0);
 }
 /* }}} */
 
